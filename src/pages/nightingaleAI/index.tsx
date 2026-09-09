@@ -1,13 +1,14 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Spin, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { AlarmClock, Blocks, Bot, Cable, Compass, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, RadioTower, Share2 } from 'lucide-react';
+import { AlarmClock, Blocks, Bot, Cable, CalendarClock, Compass, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, RadioTower, Share2 } from 'lucide-react';
 import { Redirect, useHistory, useLocation } from 'react-router-dom';
 
 import { CommonStateContext } from '@/App';
 import { useAiChatContext } from '@/components/AiChatNG';
 import ChatHistory from '@/components/AiChatNG/ChatHistory';
 import ChatPanel from '@/components/AiChatNG/ChatPanel';
+import TaskChats from '@/components/AiChatNG/TaskChats';
 import PageError from '@/components/PageError';
 import { EmptyConversation } from '@/components/AiChatNG/MessageBlocks';
 import { buildPageFrom } from '@/components/AiChatNG/recommend';
@@ -21,6 +22,7 @@ import { AiTaskPage, MCPServerList } from 'plus:/parcels/NightingaleAI';
 
 const LLMConfigList = React.lazy(() => import('@/pages/aiConfig/llmConfigs/pages/List'));
 const SkillList = React.lazy(() => import('@/pages/aiConfig/skills/pages/List'));
+const CronTaskList = React.lazy(() => import('@/pages/aiConfig/cronTasks/pages/List'));
 
 const PAGE_PATH = '/nightingale-ai';
 const SIDEBAR_WIDTH_STORAGE_KEY = 'nightingale-ai-sidebar-width';
@@ -30,6 +32,7 @@ const SIDEBAR_MAX_WIDTH = 480;
 const configItems = [
   { key: 'llm-configs', labelKey: 'nightingale.llm_configs', icon: Bot, perm: '/ai-config/llm-configs', component: LLMConfigList, plusOnly: false },
   { key: 'skills', labelKey: 'nightingale.skills', icon: Blocks, perm: '/ai-config/skills', component: SkillList, plusOnly: false },
+  { key: 'cron-tasks', labelKey: 'nightingale.cron_tasks', icon: CalendarClock, perm: '/ai-config/cron-tasks', component: CronTaskList, plusOnly: false },
   { key: 'mcp-servers', labelKey: 'nightingale.mcp_servers', icon: Cable, perm: '/ai-config/mcp-servers', component: MCPServerList, plusOnly: true },
   { key: 'ai-task', labelKey: 'nightingale.ai_task', icon: RadioTower, perm: '/ai-task', component: AiTaskPage, plusOnly: true },
 ] as const;
@@ -37,6 +40,7 @@ const configItems = [
 const configIconAnimationClasses = {
   'llm-configs': 'group-hover:animate-nightingale-bot-wiggle motion-reduce:group-hover:animate-none',
   skills: 'group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:rotate-6 motion-reduce:group-hover:transform-none',
+  'cron-tasks': 'group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:rotate-6 motion-reduce:group-hover:transform-none',
   'mcp-servers': 'group-hover:animate-nightingale-cable-plug motion-reduce:group-hover:animate-none',
   'ai-task': 'group-hover:scale-110 motion-reduce:group-hover:transform-none',
 } as const;
@@ -208,6 +212,31 @@ export default function NightingaleAIPage() {
     },
     [t],
   );
+
+  // 删除会话（普通会话或任务执行会话）后：若是当前正在查看/缓存的会话，
+  // 清掉缓存并回到新会话，避免下次进入页面时继续加载已删除的会话。
+  const handleChatDeleted = useCallback(
+    (chat: IAiChatHistoryItem) => {
+      if (!chat?.chat_id) return;
+      if (chat.chat_id === cachedSessionId) setCachedSessionId(undefined);
+      if (chat.chat_id === chatId || chat.chat_id === cachedSessionId) {
+        history.push(PAGE_PATH, { newChat: true });
+      }
+      setHistoryRefreshKey((key) => key + 1);
+    },
+    [cachedSessionId, chatId, history, setCachedSessionId],
+  );
+
+  // 打开一个已不存在的会话（如删除后的陈旧链接）：静默回到新会话。
+  const handleChatLoadError = useCallback(
+    (error: Error) => {
+      if (/chat not found/i.test(error.message)) {
+        setCachedSessionId(undefined);
+        history.replace(PAGE_PATH, { newChat: true });
+      }
+    },
+    [history, setCachedSessionId],
+  );
   const handleHistoryLoaded = useCallback((nextHistoryItems: IAiChatHistoryItem[]) => setHistoryItems(nextHistoryItems), []);
   const historyChat = useMemo(() => historyItems.find((item) => item.chat_id === chatId), [chatId, historyItems]);
   const chatTitle = chatId ? historyChat?.title || (selectedChat?.chat_id === chatId ? selectedChat.title : t('nightingale.title')) : t('nightingale.new_chat');
@@ -266,7 +295,8 @@ export default function NightingaleAIPage() {
           })}
         </nav>
         <div className='mx-4 h-px bg-fc-300' />
-        <div className='flex min-h-0 flex-1 flex-col p-2'>
+        <div className='flex min-h-0 flex-1 flex-col overflow-y-auto p-2'>
+          <TaskChats navKey={location.pathname} refreshKey={historyRefreshKey} selectedChatId={chatId} onSelect={selectChat} onDelete={handleChatDeleted} />
           <div className='px-2 pb-2 text-base font-semibold text-hint'>{t('nightingale.sessions')}</div>
           <ChatHistory
             compact
@@ -277,6 +307,7 @@ export default function NightingaleAIPage() {
             onHistoryLoaded={handleHistoryLoaded}
             onSelect={selectChat}
             onShare={(chat) => handleShare(chat.chat_id)}
+            onDelete={handleChatDeleted}
           />
         </div>
         {!sidebarCollapsed && <div className='absolute right-0 top-0 h-full w-1 cursor-ew-resize' onMouseDown={startSidebarResize} />}
@@ -318,6 +349,7 @@ export default function NightingaleAIPage() {
                 chatId={chatId}
                 queryPageFrom={chatPageFrom}
                 onChatChange={handleChatChange}
+                onError={handleChatLoadError}
                 inputContainerClassName='mb-5'
                 welcomeSlot={
                   chatId

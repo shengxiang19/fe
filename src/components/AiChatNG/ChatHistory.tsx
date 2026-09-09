@@ -1,8 +1,8 @@
 import React from 'react';
-import { Button, Dropdown, Empty, Input, Menu, Popover, Spin } from 'antd';
+import { Button, Dropdown, Empty, Input, Menu, Modal, Popover, Spin } from 'antd';
 import moment from 'moment';
 import { useTranslation } from 'react-i18next';
-import { Edit3, MessageSquare, MoreVertical, Search, Share2 } from 'lucide-react';
+import { Edit3, MessageSquare, MoreVertical, Search, Share2, Trash2 } from 'lucide-react';
 
 import { NAME_SPACE } from './constants';
 import { deleteChat, getChatHistory, renameChat } from './services';
@@ -139,6 +139,19 @@ export default function ChatHistory(props: IChatHistoryPageProps) {
     [onShare, t],
   );
 
+  const handleDeleteConfirm = React.useCallback(
+    (chat: IAiChatHistoryItem) => {
+      Modal.confirm({
+        title: t('common:confirm.delete'),
+        okText: t('common:btn.delete'),
+        okButtonProps: { danger: true },
+        cancelText: t('common:btn.cancel'),
+        onOk: () => handleDelete(chat),
+      });
+    },
+    [handleDelete, t],
+  );
+
   const handleRename = React.useCallback(
     async (chat: IAiChatHistoryItem) => {
       const nextTitle = renameTitle.trim();
@@ -246,6 +259,12 @@ export default function ChatHistory(props: IChatHistoryPageProps) {
                                       items={[
                                         { key: 'rename', icon: <Edit3 size={14} />, label: t('history.rename') },
                                         { key: 'share', icon: <Share2 size={14} />, label: t('history.share') },
+                                        {
+                                          key: 'delete',
+                                          danger: true,
+                                          icon: <Trash2 size={14} />,
+                                          label: <span className='text-red-500'>{t('common:btn.delete')}</span>,
+                                        },
                                       ]}
                                       onClick={({ key, domEvent }) => {
                                         domEvent.stopPropagation();
@@ -253,6 +272,10 @@ export default function ChatHistory(props: IChatHistoryPageProps) {
                                         if (key === 'rename') {
                                           setRenameChatId(chat.chat_id);
                                           setRenameTitle(chat.title);
+                                          return;
+                                        }
+                                        if (key === 'delete') {
+                                          handleDeleteConfirm(chat);
                                           return;
                                         }
                                         handleShare(chat);

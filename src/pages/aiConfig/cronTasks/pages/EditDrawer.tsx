@@ -1,0 +1,87 @@
+import React, { useEffect } from 'react';
+import { Button, Drawer, Form, Space, Spin } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { useRequest } from 'ahooks';
+
+import { NS } from '../constants';
+import { getItem, putItem } from '../services';
+import FormCpt from './Form';
+
+interface Props {
+  id?: number;
+
+  visible: boolean;
+  onOk: () => void;
+  onClose: () => void;
+}
+
+export default function EditDrawer(props: Props) {
+  const { t } = useTranslation(NS);
+  const { visible, onOk, onClose, id } = props;
+  const [form] = Form.useForm();
+
+  const { loading } = useRequest(
+    () => {
+      if (!id) {
+        return Promise.resolve(null);
+      }
+      return getItem(id);
+    },
+    {
+      refreshDeps: [id],
+      onSuccess(data) {
+        if (data) {
+          form.resetFields();
+          form.setFieldsValue({
+            name: data.name,
+            description: data.description,
+            content: data.content,
+            cron_expr: data.cron_expr,
+            llm_config_id: data.llm_config_id ?? 0,
+            skill_ids: data.skill_ids ?? [],
+            enabled: data.enabled,
+          });
+        }
+      },
+    },
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      form.resetFields();
+    }
+  }, [visible, form]);
+
+  return (
+    <Drawer
+      width={700}
+      title={t('form.edit_title')}
+      placement='right'
+      visible={visible}
+      onClose={onClose}
+      footer={
+        <Space>
+          <Button onClick={onClose}>{t('common:btn.cancel')}</Button>
+          <Button
+            type='primary'
+            onClick={() => {
+              if (!id) return;
+              form.validateFields().then((values) => {
+                putItem(id, values).then(() => {
+                  onOk();
+                });
+              });
+            }}
+          >
+            {t('common:btn.save')}
+          </Button>
+        </Space>
+      }
+      className='n9e-antd-drawer'
+    >
+      <Spin spinning={loading}>
+        <FormCpt form={form} />
+      </Spin>
+    </Drawer>
+  );
+}

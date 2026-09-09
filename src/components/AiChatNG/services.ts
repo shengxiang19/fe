@@ -9,6 +9,7 @@ import {
   IAiChatMessageLocator,
   IAiChatSendMessageRequest,
   IAiChatSendMessageResponse,
+  IAiChatTaskGroup,
 } from './types';
 import _ from 'lodash';
 
@@ -24,6 +25,13 @@ export const createChat = (data: IAiChatCreateChatRequest): Promise<IAiChatHisto
 
 export const getChatHistory = (): Promise<IAiChatHistoryItem[]> => {
   return request(`${apiPrefix}/chat/history`, {
+    method: RequestMethod.Get,
+  }).then((res) => res?.[dataPathName] || []);
+};
+
+// 定时任务执行会话，按任务分组（侧边栏「任务」区块）
+export const getTaskChats = (): Promise<IAiChatTaskGroup[]> => {
+  return request(`${apiPrefix}/chat/tasks`, {
     method: RequestMethod.Get,
   }).then((res) => res?.[dataPathName] || []);
 };

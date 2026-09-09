@@ -85,6 +85,15 @@ export interface IAiChatHistoryItem {
   recommend_action?: IAiChatAction[];
   user_id?: number;
   is_new?: boolean;
+  task_id?: number;
+  task_name?: string;
+}
+
+// 定时任务执行会话分组（侧边栏「任务」区块的一个文件夹）
+export interface IAiChatTaskGroup {
+  task_id: number;
+  task_name: string;
+  chats: IAiChatHistoryItem[];
 }
 
 export interface IAiChatCreateChatRequest extends IAiChatPageInfo {}
